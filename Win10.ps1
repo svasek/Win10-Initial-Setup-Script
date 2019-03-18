@@ -1,7 +1,7 @@
 ##########
 # Win 10 / Server 2016 / Server 2019 Initial Setup Script - Main execution loop
 # Author: Disassembler <disassembler@dasm.cz>
-# Version: v3.5, 2018-12-23
+# Version: v3.6, 2019-01-28
 # Source: https://github.com/Disassembler0/Win10-Initial-Setup-Script
 ##########
 
@@ -19,10 +19,10 @@ $PSCommandArgs = @()
 Function AddOrRemoveTweak($tweak) {
 	If ($tweak[0] -eq "!") {
 		# If the name starts with exclamation mark (!), exclude the tweak from selection
-		$global:tweaks = $global:tweaks | Where-Object { $_ -ne $tweak.Substring(1) }
+		$script:tweaks = $script:tweaks | Where-Object { $_ -ne $tweak.Substring(1) }
 	} ElseIf ($tweak -ne "") {
 		# Otherwise add the tweak
-		$global:tweaks += $tweak
+		$script:tweaks += $tweak
 	}
 }
 

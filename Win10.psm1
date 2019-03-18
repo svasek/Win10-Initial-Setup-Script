@@ -1,7 +1,7 @@
 ##########
 # Win 10 / Server 2016 / Server 2019 Initial Setup Script - Tweak library
 # Author: Disassembler <disassembler@dasm.cz>
-# Version: v3.5, 2018-12-23
+# Version: v3.6, 2019-01-28
 # Source: https://github.com/Disassembler0/Win10-Initial-Setup-Script
 ##########
 
@@ -23,6 +23,10 @@ Function DisableTelemetry {
 		New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\PreviewBuilds" -Force | Out-Null
 	}
 	Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\PreviewBuilds" -Name "AllowBuildPreview" -Type DWord -Value 0
+	If (!(Test-Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Software Protection Platform")) {
+		New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Software Protection Platform" -Force | Out-Null
+	}
+	Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Software Protection Platform" -Name "NoGenTicket" -Type DWord -Value 1
 	Disable-ScheduledTask -TaskName "Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser" | Out-Null
 	Disable-ScheduledTask -TaskName "Microsoft\Windows\Application Experience\ProgramDataUpdater" | Out-Null
 	Disable-ScheduledTask -TaskName "Microsoft\Windows\Autochk\Proxy" | Out-Null
@@ -38,6 +42,7 @@ Function EnableTelemetry {
 	Set-ItemProperty -Path "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Policies\DataCollection" -Name "AllowTelemetry" -Type DWord -Value 3
 	Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name "AllowTelemetry" -ErrorAction SilentlyContinue
 	Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\PreviewBuilds" -Name "AllowBuildPreview" -ErrorAction SilentlyContinue
+	Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Software Protection Platform" -Name "NoGenTicket" -ErrorAction SilentlyContinue
 	Enable-ScheduledTask -TaskName "Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser" | Out-Null
 	Enable-ScheduledTask -TaskName "Microsoft\Windows\Application Experience\ProgramDataUpdater" | Out-Null
 	Enable-ScheduledTask -TaskName "Microsoft\Windows\Autochk\Proxy" | Out-Null
@@ -432,16 +437,36 @@ Function EnableWAPPush {
 	Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\dmwappushservice" -Name "DelayedAutoStart" -Type DWord -Value 1
 }
 
-# Hide recently opened items in Jump Lists on Start or the taskbar
-Function HideRecentJumplists {
-	Write-Output "Hiding recently opened items in Jump Lists..."
-	Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "Start_TrackDocs" -Type DWord -Value 0
+# Enable clearing of recent files on exit
+# Empties most recently used (MRU) items lists such as 'Recent Items' menu on the Start menu, jump lists, and shortcuts at the bottom of the 'File' menu in applications during every logout.
+Function EnableClearRecentFiles {
+	Write-Output "Enabling clearing of recent files on exit..."
+	If (!(Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer")) {
+		New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" | Out-Null
+	}
+	Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "ClearRecentDocsOnExit" -Type DWord -Value 1
 }
 
-# Show recently opened items in Jump Lists on Start or the taskbar
-Function ShowRecentJumplists {
-	Write-Output "Showing recently opened items in Jump Lists..."
-	Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "Start_TrackDocs" -ErrorAction SilentlyContinue
+# Disable clearing of recent files on exit
+Function DisableClearRecentFiles {
+	Write-Output "Disabling clearing of recent files on exit..."
+	Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "ClearRecentDocsOnExit" -ErrorAction SilentlyContinue
+}
+
+# Disable recent files lists
+# Stops creating most recently used (MRU) items lists such as 'Recent Items' menu on the Start menu, jump lists, and shortcuts at the bottom of the 'File' menu in applications.
+Function DisableRecentFiles {
+	Write-Output "Disabling recent files lists..."
+	If (!(Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer")) {
+		New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" | Out-Null
+	}
+	Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoRecentDocsHistory" -Type DWord -Value 1
+}
+
+# Enable recent files lists
+Function EnableRecentFiles {
+	Write-Output "Enabling recent files lists..."
+	Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoRecentDocsHistory" -ErrorAction SilentlyContinue
 }
 
 ##########
@@ -505,6 +530,7 @@ Function EnableSMB1 {
 }
 
 # Disable SMB Server - Completely disables file and printer sharing, but leaves the system able to connect to another SMB server as a client
+# Note: Do not run this if you plan to use Docker and Shared Drives (as it uses SMB internally), see https://github.com/Disassembler0/Win10-Initial-Setup-Script/issues/216
 Function DisableSMBServer {
 	Write-Output "Disabling SMB Server..."
 	Set-SmbServerConfiguration -EnableSMB1Protocol $false -Force
@@ -1081,6 +1107,19 @@ Function EnableIndexing {
 	Start-Service "WSearch" -WarningAction SilentlyContinue
 }
 
+# Disable Modern UI swap file
+# This disables creation and use of swapfile.sys and frees 256 MB of disk space. Swapfile.sys is used only by Modern UI apps. The tweak has no effect on the real swap in pagefile.sys.
+Function DisableSwapFile {
+	Write-Output "Disabling Modern UI swap file..."
+	Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" -Name "SwapfileControl" -Type Dword -Value 0
+}
+
+# Enable Modern UI swap file
+Function EnableSwapFile {
+	Write-Output "Enabling Modern UI swap file..."
+	Remove-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" -Name "SwapfileControl" -ErrorAction SilentlyContinue
+}
+
 # Disable the updating of the NTFS Last Access Time stamps
 Function DisableNTFSLastAccess {
 	Write-Output "Disabling the updating of the Last Access Time stamps..."
@@ -1492,19 +1531,34 @@ Function EnableNewAppPrompt {
 	Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "NoNewAppAlert" -ErrorAction SilentlyContinue
 }
 
-# Hide 'Recently added' list from Start Menu
+# Hide 'Recently added' list from the Start Menu
 Function HideRecentlyAddedApps {
-	Write-Output "Hiding 'Recently added' list from Start Menu..."
+	Write-Output "Hiding 'Recently added' list from the Start Menu..."
 	If (!(Test-Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer")) {
 		New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" | Out-Null
 	}
 	Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "HideRecentlyAddedApps" -Type DWord -Value 1
 }
 
-# Show 'Recently added' list in Start Menu
+# Show 'Recently added' list in the Start Menu
 Function ShowRecentlyAddedApps {
-	Write-Output "Showing 'Recently added' list in Start Menu..."
+	Write-Output "Showing 'Recently added' list in the Start Menu..."
 	Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "HideRecentlyAddedApps" -ErrorAction SilentlyContinue
+}
+
+# Hide 'Most used' apps list from the Start Menu - Applicable until 1703 (hidden by default since then)
+Function HideMostUsedApps {
+	Write-Output "Hiding 'Most used' apps list from the Start Menu..."
+	If (!(Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer")) {
+		New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" | Out-Null
+	}
+	Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoStartMenuMFUprogramsList" -Type DWord -Value 1
+}
+
+# Show 'Most used' apps list in the Start Menu - Applicable until 1703 (GPO broken since then)
+Function ShowMostUsedApps {
+	Write-Output "Showing 'Most used' apps list in the Start Menu..."
+	Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoStartMenuMFUprogramsList" -ErrorAction SilentlyContinue
 }
 
 # Set Control Panel view to Small icons (Classic)
@@ -1656,6 +1710,22 @@ Function DisableNumlock {
 		$wsh = New-Object -ComObject WScript.Shell
 		$wsh.SendKeys('{NUMLOCK}')
 	}
+}
+
+# Disable enhanced pointer precision
+Function DisableEnhPointerPrecision {
+	Write-Output "Disabling enhanced pointer precision..."
+	Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" -Name "MouseSpeed" -Type String -Value "0"
+	Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" -Name "MouseThreshold1" -Type String -Value "0"
+	Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" -Name "MouseThreshold2" -Type String -Value "0"
+}
+
+# Enable enhanced pointer precision
+Function EnableEnhPointerPrecision {
+	Write-Output "Enabling enhanced pointer precision..."
+	Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" -Name "MouseSpeed" -Type String -Value "1"
+	Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" -Name "MouseThreshold1" -Type String -Value "6"
+	Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" -Name "MouseThreshold2" -Type String -Value "10"
 }
 
 # Set sound scheme to No Sounds
@@ -1836,15 +1906,16 @@ Function ShowSyncNotifications {
 }
 
 # Hide recently and frequently used item shortcuts in Explorer
+# Note: This is only UI tweak to hide the shortcuts. In order to stop creating most recently used (MRU) items lists everywhere, use privacy tweak 'DisableRecentFiles' instead.
 Function HideRecentShortcuts {
-	Write-Output "Hiding recent shortcuts..."
+	Write-Output "Hiding recent shortcuts in Explorer..."
 	Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer" -Name "ShowRecent" -Type DWord -Value 0
 	Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer" -Name "ShowFrequent" -Type DWord -Value 0
 }
 
 # Show recently and frequently used item shortcuts in Explorer
 Function ShowRecentShortcuts {
-	Write-Output "Showing recent shortcuts..."
+	Write-Output "Showing recent shortcuts in Explorer..."
 	Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer" -Name "ShowRecent" -ErrorAction SilentlyContinue
 	Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer" -Name "ShowFrequent" -ErrorAction SilentlyContinue
 }
@@ -2364,7 +2435,6 @@ Function UninstallMsftBloat {
 	Get-AppxPackage "Microsoft.WebMediaExtensions" | Remove-AppxPackage
 	Get-AppxPackage "Microsoft.MixedReality.Portal" | Remove-AppxPackage
 	Get-AppxPackage "Microsoft.YourPhone" | Remove-AppxPackage
-	Get-AppxPackage "Microsoft.ScreenSketch" | Remove-AppxPackage
 }
 
 # Install default Microsoft applications
@@ -2414,7 +2484,6 @@ Function InstallMsftBloat {
 	Get-AppxPackage -AllUsers "Microsoft.WebMediaExtensions" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
 	Get-AppxPackage -AllUsers "Microsoft.MixedReality.Portal" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
 	Get-AppxPackage -AllUsers "Microsoft.YourPhone" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
-	Get-AppxPackage -AllUsers "Microsoft.ScreenSketch" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
 }
 # In case you have removed them for good, you can try to restore the files using installation medium as follows
 # New-Item C:\Mnt -Type Directory | Out-Null
@@ -2438,8 +2507,12 @@ function UninstallThirdPartyBloat {
 	Get-AppxPackage "A278AB0D.DisneyMagicKingdoms" | Remove-AppxPackage
 	Get-AppxPackage "A278AB0D.MarchofEmpires" | Remove-AppxPackage
 	Get-AppxPackage "ActiproSoftwareLLC.562882FEEB491" | Remove-AppxPackage
+	Get-AppxPackage "AD2F1837.HPJumpStart" | Remove-AppxPackage
 	Get-AppxPackage "AdobeSystemsIncorporated.AdobePhotoshopExpress" | Remove-AppxPackage
+	Get-AppxPackage "Amazon.com.Amazon" | Remove-AppxPackage
+	Get-AppxPackage "C27EB4BA.DropboxOEM" | Remove-AppxPackage
 	Get-AppxPackage "CAF9E577.Plex" | Remove-AppxPackage
+	Get-AppxPackage "CyberLinkCorp.hs.PowerMediaPlayer14forHPConsumerPC" | Remove-AppxPackage
 	Get-AppxPackage "D52A8D61.FarmVille2CountryEscape" | Remove-AppxPackage
 	Get-AppxPackage "D5EA27B7.Duolingo-LearnLanguagesforFree" | Remove-AppxPackage
 	Get-AppxPackage "DB6EA5DB.CyberLinkMediaSuiteEssentials" | Remove-AppxPackage
@@ -2456,6 +2529,7 @@ function UninstallThirdPartyBloat {
 	Get-AppxPackage "LenovoCorporation.LenovoID" | Remove-AppxPackage
 	Get-AppxPackage "LenovoCorporation.LenovoSettings" | Remove-AppxPackage
 	Get-AppxPackage "PandoraMediaInc.29680B314EFC2" | Remove-AppxPackage
+	Get-AppxPackage "PricelinePartnerNetwork.Booking.comBigsavingsonhot" | Remove-AppxPackage
 	Get-AppxPackage "SpotifyAB.SpotifyMusic" | Remove-AppxPackage
 	Get-AppxPackage "WinZipComputing.WinZipUniversal" | Remove-AppxPackage
 	Get-AppxPackage "XINGAG.XING" | Remove-AppxPackage
@@ -2479,8 +2553,12 @@ Function InstallThirdPartyBloat {
 	Get-AppxPackage -AllUsers "A278AB0D.DisneyMagicKingdoms" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
 	Get-AppxPackage -AllUsers "A278AB0D.MarchofEmpires" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
 	Get-AppxPackage -AllUsers "ActiproSoftwareLLC.562882FEEB491" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
+	Get-AppxPackage -AllUsers "AD2F1837.HPJumpStart" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
 	Get-AppxPackage -AllUsers "AdobeSystemsIncorporated.AdobePhotoshopExpress" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
+	Get-AppxPackage -AllUsers "Amazon.com.Amazon" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
+	Get-AppxPackage -AllUsers "C27EB4BA.DropboxOEM" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
 	Get-AppxPackage -AllUsers "CAF9E577.Plex" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
+	Get-AppxPackage -AllUsers "CyberLinkCorp.hs.PowerMediaPlayer14forHPConsumerPC" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
 	Get-AppxPackage -AllUsers "D52A8D61.FarmVille2CountryEscape" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
 	Get-AppxPackage -AllUsers "D5EA27B7.Duolingo-LearnLanguagesforFree" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
 	Get-AppxPackage -AllUsers "DB6EA5DB.CyberLinkMediaSuiteEssentials" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
@@ -2497,6 +2575,7 @@ Function InstallThirdPartyBloat {
 	Get-AppxPackage -AllUsers "LenovoCorporation.LenovoID" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
 	Get-AppxPackage -AllUsers "LenovoCorporation.LenovoSettings" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
 	Get-AppxPackage -AllUsers "PandoraMediaInc.29680B314EFC2" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
+	Get-AppxPackage -AllUsers "PricelinePartnerNetwork.Booking.comBigsavingsonhot" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
 	Get-AppxPackage -AllUsers "SpotifyAB.SpotifyMusic" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
 	Get-AppxPackage -AllUsers "WinZipComputing.WinZipUniversal" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
 	Get-AppxPackage -AllUsers "XINGAG.XING" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
@@ -2519,7 +2598,7 @@ Function InstallWindowsStore {
 	Get-AppxPackage -AllUsers "Microsoft.WindowsStore" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
 }
 
-# Disable Xbox features
+# Disable Xbox features - Not applicable to Server
 Function DisableXboxFeatures {
 	Write-Output "Disabling Xbox features..."
 	Get-AppxPackage "Microsoft.XboxApp" | Remove-AppxPackage
@@ -2528,6 +2607,7 @@ Function DisableXboxFeatures {
 	Get-AppxPackage "Microsoft.XboxGameOverlay" | Remove-AppxPackage
 	Get-AppxPackage "Microsoft.XboxGamingOverlay" | Remove-AppxPackage
 	Get-AppxPackage "Microsoft.Xbox.TCUI" | Remove-AppxPackage
+	Set-ItemProperty -Path "HKCU:\Software\Microsoft\GameBar" -Name "AutoGameModeEnabled" -Type DWord -Value 0
 	Set-ItemProperty -Path "HKCU:\System\GameConfigStore" -Name "GameDVR_Enabled" -Type DWord -Value 0
 	If (!(Test-Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR")) {
 		New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" | Out-Null
@@ -2535,7 +2615,7 @@ Function DisableXboxFeatures {
 	Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" -Name "AllowGameDVR" -Type DWord -Value 0
 }
 
-# Enable Xbox features
+# Enable Xbox features - Not applicable to Server
 Function EnableXboxFeatures {
 	Write-Output "Enabling Xbox features..."
 	Get-AppxPackage -AllUsers "Microsoft.XboxApp" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
@@ -2544,6 +2624,7 @@ Function EnableXboxFeatures {
 	Get-AppxPackage -AllUsers "Microsoft.XboxGameOverlay" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
 	Get-AppxPackage -AllUsers "Microsoft.XboxGamingOverlay" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
 	Get-AppxPackage -AllUsers "Microsoft.Xbox.TCUI" | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}
+	Remove-ItemProperty -Path "HKCU:\Software\Microsoft\GameBar" -Name "AutoGameModeEnabled" -ErrorAction SilentlyContinue
 	Set-ItemProperty -Path "HKCU:\System\GameConfigStore" -Name "GameDVR_Enabled" -Type DWord -Value 1
 	Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" -Name "AllowGameDVR" -ErrorAction SilentlyContinue
 }
