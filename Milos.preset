@@ -7,17 +7,16 @@ DisableRecentFiles
 
 ### Service Tweaks ###
 DisableNTFSLastAccess
-EnableHibernation
-DisableSleepButton
+DisableHibernation
+EnableSleepButton
 DisableFastStartup
 
 ### UI Tweaks ###
-#!DisableActionCenter       # EnableActionCenter
 !DisableLockScreen          # EnableLockScreen
 !HideNetworkFromLockScreen  # ShowNetworkOnLockScreen
 !HideShutdownFromLockScreen # ShowShutdownOnLockScreen
-#!DisableLockScreenBlur
-HideRecentlyAddedApps
+!HideTaskView               # ShowTaskView
+HideRecentlyAddedApps       # ShowRecentlyAddedApps
 EnableTitleBarColor
 #EnableDarkTheme
 AddENKeyboard
@@ -26,11 +25,14 @@ EnableNumlock
 ### Explorer UI Tweaks ###
 ShowExplorerTitleFullPath
 !HideQuickAccess
+!ShowHiddenFiles
+ShowNavPaneLibraries
+ShowThisPCOnDesktop
 ShowUserFolderOnDesktop
-
 !HideDesktopFromThisPC
 !HideDocumentsFromThisPC
 !HideDownloadsFromThisPC
+!HideMusicFromThisPC
 !HidePicturesFromThisPC
 !HideVideosFromThisPC
 
@@ -38,8 +40,11 @@ ShowUserFolderOnDesktop
 !SetPhotoViewerAssociation
 AddPhotoViewerOpenWith
 
+### Unpinning ###
+UnpinStartMenuTiles
+
 ### Auxiliary Functions ###
-!Restart
 !WaitForKey
+!Restart
 WaitForKey
 Restart
